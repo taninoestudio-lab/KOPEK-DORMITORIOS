@@ -1,0 +1,925 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1D2B33">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>KOPEK · Dormitorios</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%231D2B33'/%3E%3Ctext x='32' y='44' font-family='Arial Narrow,Arial' font-size='34' font-weight='800' text-anchor='middle' fill='%23fff'%3EK%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<!--
+=====================================================================
+KOPEK · Dormitorios
+App para llevar el tablero de dormitorios, las dosis y los informes
+médicos. Se abre desde el navegador del celular, sin cuenta de Claude.
+
+Equipo: Isaías, Lozano, Juan Pablo y Lenny.
+
+CÓMO CONECTARLA A LA NUBE GRATIS (Firebase, plan Spark, sin tarjeta)
+1. Entra a https://console.firebase.google.com con una cuenta de Google
+   y crea un proyecto (ej. "kopek-dormitorios"). Desactiva Analytics.
+2. Menú Compilación > Firestore Database > Crear base de datos.
+   Elige "modo de producción" y la región más cercana.
+3. En Firestore, pestaña "Reglas", borra lo que haya, pega esto y
+   pulsa "Publicar":
+
+      rules_version = '2';
+      service cloud.firestore {
+        match /databases/{database}/documents {
+          match /equipos/{codigo}/{coleccion}/{id} {
+            allow read, write: if codigo.size() >= 10;
+          }
+        }
+      }
+
+4. Configuración del proyecto (engrane) > "Tus apps" > icono web </>
+   > registra la app (sin Hosting) y copia el bloque firebaseConfig.
+5. Pega esos valores abajo, en FIREBASE_CONFIG, y guarda el archivo.
+6. Publica el archivo con el nombre index.html (por ejemplo en
+   GitHub Pages) y comparte el enlace en el grupo interno.
+7. Cada persona abre el enlace, elige su nombre y escribe el mismo
+   "código del equipo" (mínimo 10 letras o números).
+
+Mientras FIREBASE_CONFIG tenga "PEGA_AQUI", la app funciona en modo
+demostración: los datos se quedan solo en ese dispositivo.
+=====================================================================
+-->
+
+<style>
+:root{
+  --fondo:#E8ECEE;
+  --papel:#FFFFFF;
+  --tinta:#1D2B33;
+  --tinta-2:#4A5A64;
+  --linea:#C9D2D7;
+  --borde-campo:#8FA1AB;
+  --acento:#2C6E7F;
+  --ocupado:#B3302B;
+  --libre:#2A7D4F;
+  --limpieza:#E2A536;
+  --aviso-fondo:#FFF3D6;
+  --aviso-borde:#D9A21F;
+  --fuente:"Barlow",system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+  --fuente-cond:"Barlow Condensed","Arial Narrow","Roboto Condensed",system-ui,sans-serif;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--fondo);color:var(--tinta);font-family:var(--fuente);font-size:16px;line-height:1.4;padding-bottom:calc(84px + env(safe-area-inset-bottom))}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--acento);outline-offset:2px}
+body.sin-nav{padding-bottom:0}
+.vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* ---------- Cabecera ---------- */
+#cab{background:var(--tinta);color:#fff;position:sticky;top:0;z-index:20;padding-top:env(safe-area-inset-top)}
+.cab-in{max-width:1080px;margin:0 auto;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.marca{display:flex;align-items:baseline;gap:10px;min-width:0}
+.logo{font-family:var(--fuente-cond);font-weight:800;font-size:28px;letter-spacing:.14em;line-height:1}
+.marca .sub{font-weight:500;font-size:15px;opacity:.75}
+.cab-der{display:flex;align-items:center;gap:8px}
+.red{display:inline-flex;align-items:center;gap:6px;white-space:nowrap;border:1px solid rgba(255,255,255,.35);background:transparent;color:#fff;border-radius:999px;padding:4px 10px;font-size:13px;font-weight:600;min-height:32px}
+.red::before{content:"";width:9px;height:9px;border-radius:50%;background:#9AA8B0}
+.red-ok::before{background:#4CC17E}
+.red-pend::before{background:#E2A536}
+.red-off::before{background:#E2A536}
+.red-err::before{background:#F0645C}
+@media(max-width:480px){.marca .sub{display:none}.logo{font-size:26px}}
+.usr{background:#fff;color:var(--tinta);border:0;border-radius:8px;padding:5px 12px;font-weight:700;min-height:34px}
+
+/* ---------- Estructura ---------- */
+main{max-width:1080px;margin:0 auto;padding:16px}
+.tit{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:4px 0 14px}
+.tit h1{font-family:var(--fuente-cond);font-weight:800;font-size:34px;line-height:1;margin:0}
+.tit p{margin:4px 0 0;color:var(--tinta-2);max-width:46ch}
+.equipo{color:var(--tinta-2);font-size:14px;margin:22px 0 0;text-align:center}
+
+/* ---------- Filtros ---------- */
+.filtros{display:flex;gap:8px;overflow-x:auto;padding:2px 0 12px;margin:0 -16px;padding-left:16px;padding-right:16px;scrollbar-width:none}
+.filtros::-webkit-scrollbar{display:none}
+.filtro{flex:0 0 auto;display:inline-flex;align-items:center;gap:7px;background:var(--papel);border:1.5px solid var(--linea);border-radius:8px;padding:0 12px;min-height:44px;font-weight:600;white-space:nowrap}
+.filtro .pt{width:10px;height:10px;border-radius:50%;background:var(--c,#9AA8B0)}
+.filtro b{font-family:var(--fuente-cond);font-size:20px;font-weight:700}
+.filtro[aria-pressed="true"]{background:var(--tinta);border-color:var(--tinta);color:#fff}
+
+/* ---------- Tablero ---------- */
+.e-ocupado{--c:var(--ocupado)}
+.e-disponible{--c:var(--libre)}
+.e-limpieza{--c:var(--limpieza)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(158px,1fr));gap:12px}
+.tarj{display:flex;flex-direction:column;padding:0;text-align:left;background:var(--papel);border:1.5px solid var(--linea);border-radius:8px;overflow:hidden;min-height:132px}
+.tarj:active{transform:scale(.985)}
+.tarj-top{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:3px 10px 4px;background:var(--c);color:#fff}
+.e-limpieza .tarj-top{color:var(--tinta)}
+.num{font-family:var(--fuente-cond);font-weight:800;font-size:40px;line-height:1}
+.est{font-size:13px;font-weight:600;text-align:right}
+.tarj-cuerpo{display:block;padding:8px 10px 10px;flex:1}
+.nom{display:block;font-weight:700;font-size:18px;line-height:1.15;overflow-wrap:anywhere}
+.raza{display:block;color:var(--tinta-2);font-size:14px;margin-top:1px;overflow-wrap:anywhere}
+.tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:7px}
+.tag{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:600;padding:2px 7px;border-radius:4px;background:#E3E9EC}
+.tag.trat{background:#FADBD8;color:#8B1D18}
+.tag svg{width:12px;height:12px}
+.ali{display:block;font-size:13px;color:var(--tinta-2);margin-top:7px;overflow-wrap:anywhere}
+.libre{display:block;color:var(--tinta-2);font-size:15px;overflow-wrap:anywhere}
+.vacio{background:var(--papel);border:1.5px dashed var(--borde-campo);border-radius:8px;padding:22px 16px;color:var(--tinta-2);text-align:center}
+
+/* ---------- Listas (dosis, historial, informes) ---------- */
+.dia{font-family:var(--fuente-cond);font-weight:700;font-size:22px;margin:18px 0 8px}
+.dia::first-letter{text-transform:uppercase}
+.lista{list-style:none;margin:0;padding:0}
+.fila{display:flex;gap:12px;padding:12px 14px;background:var(--papel);border:1.5px solid var(--linea);border-radius:8px;margin-bottom:8px}
+.fila.omitida{border-color:var(--ocupado);background:#FDF0EF}
+.hora{font-family:var(--fuente-cond);font-weight:700;font-size:26px;line-height:1.05;min-width:56px;flex:0 0 auto}
+.fila-c{display:block;min-width:0}
+.fila-c>span,.fila-c>b,.fila-c>small{display:block}
+.fila-c small{color:var(--tinta-2);font-size:14px;margin-top:2px}
+.marca-om{color:var(--ocupado)}
+.buscar{width:100%;max-width:420px;margin-bottom:6px}
+.inf{background:var(--papel);border:1.5px solid var(--linea);border-radius:8px;padding:12px 14px;margin-bottom:10px}
+.inf-cab{display:flex;justify-content:space-between;gap:10px;align-items:baseline;flex-wrap:wrap;margin-bottom:8px}
+.inf-cab b{font-size:18px}
+.inf-cab span{color:var(--tinta-2);font-weight:600}
+.inf dl{display:grid;grid-template-columns:max-content 1fr;gap:4px 14px;margin:0}
+.inf dt{color:var(--tinta-2);font-weight:600}
+.inf dd{margin:0;overflow-wrap:anywhere;white-space:pre-line}
+.inf small{display:block;margin-top:8px;color:var(--tinta-2)}
+
+/* ---------- Botones y formularios ---------- */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:48px;padding:0 18px;border-radius:8px;border:1.5px solid var(--tinta);background:var(--papel);color:var(--tinta);font-weight:700}
+.btn.primario{background:var(--tinta);color:#fff}
+.btn.peligro{border-color:var(--ocupado);color:var(--ocupado)}
+.btn.bloque{display:flex;width:100%}
+.btn svg{width:20px;height:20px}
+fieldset{border:0;margin:0;padding:0;min-width:0}
+.campo{margin:0 0 16px}
+.et{display:block;font-weight:600;font-size:15px;margin:0 0 6px;padding:0}
+.ayuda{margin:5px 0 0;color:var(--tinta-2);font-size:14px}
+input[type=text],input[type=search],input[type=time],input[type=date],select,textarea{width:100%;min-height:48px;padding:10px 12px;font-size:16px;background:#fff;border:1.5px solid var(--borde-campo);border-radius:8px}
+textarea{min-height:78px;resize:vertical}
+.opc,.seg{display:flex;flex-wrap:wrap;gap:8px}
+.opc label,.seg label{position:relative;display:block}
+.opc input,.seg input{position:absolute;opacity:0;width:1px;height:1px;left:50%;top:50%}
+.opc span,.seg span{display:flex;align-items:center;min-height:46px;padding:0 14px;border:1.5px solid var(--borde-campo);border-radius:8px;background:#fff;font-weight:600;cursor:pointer}
+.seg label{flex:1}
+.seg span{justify-content:center;text-align:center}
+.opc input:checked+span,.seg input:checked+span{background:var(--tinta);border-color:var(--tinta);color:#fff}
+.opc input:focus-visible+span,.seg input:focus-visible+span{outline:3px solid var(--acento);outline-offset:2px}
+.opc.grande{display:grid;grid-template-columns:1fr 1fr}
+.opc.grande span{min-height:54px;font-size:18px;justify-content:center}
+.check{display:flex;gap:10px;align-items:flex-start;font-weight:600}
+.check input{width:24px;height:24px;margin:1px 0 0;accent-color:var(--ocupado);flex:0 0 auto}
+.caja{border:1.5px solid var(--aviso-borde);background:var(--aviso-fondo);border-radius:8px;padding:10px 12px;margin:0 0 16px;font-size:15px}
+.caja.info{border-color:var(--linea);background:#F1F5F7}
+.caja p{margin:0}
+.caja p+p{margin-top:4px}
+.fila-btn{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:0 0 12px}
+.sep{border:0;border-top:1px solid var(--linea);margin:18px 0}
+.meta{color:var(--tinta-2);font-size:14px;margin:14px 0 0}
+
+/* ---------- Hoja (ventana) ---------- */
+dialog{border:0;padding:0;width:100%;max-width:560px;margin:auto auto 0;border-radius:16px 16px 0 0;background:var(--papel);color:var(--tinta);max-height:92dvh;overflow:hidden}
+dialog[open]{display:flex;flex-direction:column;animation:sube .18s ease-out}
+dialog::backdrop{background:rgba(20,28,34,.6)}
+.hoja-cab{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 18px;border-bottom:1px solid var(--linea)}
+.hoja-cab h2{font-family:var(--fuente-cond);font-weight:800;font-size:30px;line-height:1;margin:0;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.badge{background:var(--c);color:#fff;font-family:var(--fuente);font-size:13px;font-weight:600;padding:3px 9px;border-radius:4px}
+.e-limpieza.badge{color:var(--tinta)}
+.cerrar{background:transparent;border:1.5px solid var(--linea);border-radius:8px;width:44px;height:44px;display:grid;place-items:center}
+.cerrar svg{width:22px;height:22px}
+.hoja-cuerpo{padding:16px 18px calc(20px + env(safe-area-inset-bottom));overflow:auto}
+@media(min-width:700px){dialog{margin:auto;border-radius:12px}}
+@keyframes sube{from{transform:translateY(22px);opacity:0}to{transform:none;opacity:1}}
+@media(prefers-reduced-motion:reduce){dialog[open]{animation:none}.tarj:active{transform:none}}
+
+/* ---------- Navegación inferior ---------- */
+#nav{position:fixed;left:0;right:0;bottom:0;background:var(--papel);border-top:1px solid var(--linea);z-index:30;padding-bottom:env(safe-area-inset-bottom)}
+.nav-in{max-width:1080px;margin:0 auto;display:grid;grid-template-columns:repeat(4,1fr)}
+.nav-b{background:transparent;border:0;border-top:3px solid transparent;display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 4px 8px;color:var(--tinta-2);font-weight:600;font-size:13px;min-height:62px}
+.nav-b svg{width:24px;height:24px}
+.nav-b[aria-current="page"]{color:var(--tinta);border-top-color:var(--acento)}
+
+/* ---------- Entrada ---------- */
+.entrada{min-height:100dvh;display:grid;place-items:center;padding:20px;background:var(--tinta)}
+.entrada-card{width:100%;max-width:440px;background:var(--papel);border-radius:12px;padding:24px 20px}
+.entrada .logo{color:var(--tinta);font-size:44px}
+.entrada .sub{margin:2px 0 16px;color:var(--tinta-2);font-weight:500;font-size:18px}
+.nota-demo{background:var(--aviso-fondo);border:1.5px solid var(--aviso-borde);border-radius:8px;padding:10px 12px;font-size:15px;margin:0 0 16px}
+
+/* ---------- Aviso ---------- */
+#aviso{position:fixed;left:50%;bottom:calc(88px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--tinta);color:#fff;padding:11px 16px;border-radius:8px;font-weight:600;z-index:60;max-width:min(92vw,520px);text-align:center;box-shadow:0 2px 10px rgba(0,0,0,.25)}
+#aviso[hidden]{display:none}
+</style>
+</head>
+<body>
+<header id="cab"></header>
+<main id="app"></main>
+<nav id="nav" aria-label="Secciones"></nav>
+<dialog id="hoja" aria-labelledby="hojaTitulo">
+  <div class="hoja-cab">
+    <h2 id="hojaTitulo"></h2>
+    <button type="button" class="cerrar" data-accion="cerrar" aria-label="Cerrar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+  </div>
+  <div class="hoja-cuerpo" id="hojaCuerpo"></div>
+</dialog>
+<div id="aviso" role="status" aria-live="polite" hidden></div>
+
+<script>
+"use strict";
+
+/* =====================================================================
+   CONFIGURACIÓN (lo único que hay que tocar)
+   ===================================================================== */
+const EQUIPO = ["Isaías", "Lozano", "Juan Pablo", "Lenny"];
+const TOTAL_DORMITORIOS = 26;
+
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+const firebaseConfig = {
+  apiKey: "AIzaSyDj2iNr3T9klNm8j0NPeD612lhky-fqzs4",
+  authDomain: "kopek-dormitorios.firebaseapp.com",
+  projectId: "kopek-dormitorios",
+  storageBucket: "kopek-dormitorios.firebasestorage.app",
+  messagingSenderId: "219393022439",
+  appId: "1:219393022439:web:5e0387ab911bfc4c110542",
+  measurementId: "G-ZYBJZKN90F"
+};
+};
+const FIREBASE_VERSION = "10.14.1";
+const NUBE = !!FIREBASE_CONFIG.apiKey && !/^PEGA/i.test(FIREBASE_CONFIG.apiKey);
+
+/* =====================================================================
+   UTILIDADES
+   ===================================================================== */
+const $ = (s, r = document) => r.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const ls = {
+  get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch { /* sin almacenamiento */ } }
+};
+const pad = n => String(n).padStart(2, "0");
+const horaDe = ts => { const d = new Date(ts); return pad(d.getHours()) + ":" + pad(d.getMinutes()); };
+const isoFecha = (d = new Date()) => d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+const inicioDia = ts => { const d = new Date(ts); d.setHours(0, 0, 0, 0); return d.getTime(); };
+function etiquetaDia(ts) {
+  const diff = Math.round((inicioDia(Date.now()) - inicioDia(ts)) / 864e5);
+  if (diff === 0) return "Hoy";
+  if (diff === 1) return "Ayer";
+  return new Date(ts).toLocaleDateString("es-MX", { weekday: "long", day: "numeric", month: "long" });
+}
+function hace(ts) {
+  const m = Math.round((Date.now() - ts) / 6e4);
+  if (m < 1) return "hace un momento";
+  if (m < 60) return `hace ${m} min`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `hace ${h} h`;
+  return new Date(ts).toLocaleDateString("es-MX", { day: "numeric", month: "short" });
+}
+const limpiarCodigo = c => String(c || "").toLowerCase().replace(/[^a-z0-9_-]/g, "");
+const textoEquipo = () => `Equipo: ${EQUIPO.slice(0, -1).join(", ")} y ${EQUIPO[EQUIPO.length - 1]}.`;
+
+const ETIQ = { ocupado: "Ocupado", disponible: "Disponible", limpieza: "En limpieza" };
+const ETIQ_MOTIVO = { pension: "Pensión", entrenamiento: "Entrenamiento" };
+const CAMPOS = [
+  ["nombre", "nombre"], ["raza", "raza"], ["motivo", "motivo"],
+  ["nivel", "nivel de entrenamiento"], ["alimento", "alimento"], ["tratamiento", "tratamiento"]
+];
+const REACCIONES = ["Ninguna", "Vomitó", "La escupió", "La rechazó", "Otra"];
+
+const ICO = {
+  pastilla: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.5 20.5 3.5 13.5a4.95 4.95 0 0 1 7-7l7 7a4.95 4.95 0 0 1-7 7Z"/><path d="m8.5 8.5 7 7"/></svg>',
+  tablero: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>',
+  informe: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M9 12h6M9 16h6"/></svg>',
+  reloj: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
+  mas: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>'
+};
+
+/* =====================================================================
+   ESTADO
+   ===================================================================== */
+const S = {
+  user: ls.get("kopek_persona"),
+  codigo: ls.get("kopek_codigo") || "",
+  dorms: {}, dosis: [], informes: [], cambios: [],
+  tab: "tablero", filtro: "todos", busqInf: "",
+  conexion: NUBE ? "conectando" : "demo",
+  pendiente: false, errorMsg: "", unsubs: []
+};
+const dormActual = n => ({ estado: "disponible", ...(S.dorms[n] || {}) });
+const dormsOcupados = () => Array.from({ length: TOTAL_DORMITORIOS }, (_, i) => i + 1)
+  .map(n => ({ n, ...dormActual(n) })).filter(d => d.estado === "ocupado");
+
+/* =====================================================================
+   DATOS: modo demostración (este dispositivo) y modo nube (Firebase)
+   ===================================================================== */
+const DEMO_KEY = "kopek_demo_v1";
+const demoVacio = () => ({ dorms: {}, dosis: [], informes: [], cambios: [] });
+function demoLeer() {
+  try { return { ...demoVacio(), ...(JSON.parse(ls.get(DEMO_KEY)) || {}) }; } catch { return demoVacio(); }
+}
+function demoCargar() {
+  const d = demoLeer();
+  const desc = (a, b) => b.ts - a.ts;
+  S.dorms = d.dorms;
+  S.dosis = d.dosis.sort(desc);
+  S.informes = d.informes.sort(desc);
+  S.cambios = d.cambios.sort(desc);
+}
+
+let FB = null; // { fs, db } cuando la nube está lista
+
+function escribir(col, id, data) {
+  if (!NUBE) {
+    const d = demoLeer();
+    if (col === "dormitorios") d.dorms[id] = { ...(d.dorms[id] || {}), ...data };
+    else d[col].push({ id: "d" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), ...data });
+    ls.set(DEMO_KEY, JSON.stringify(d));
+    demoCargar(); render();
+    return;
+  }
+  if (!FB) { avisar("Aún no hay conexión con la nube. Intenta de nuevo en unos segundos."); return; }
+  const { fs, db } = FB;
+  const ref = id
+    ? fs.doc(db, "equipos", S.codigo, col, String(id))
+    : fs.doc(fs.collection(db, "equipos", S.codigo, col));
+  // Sin await: con mala señal Firestore guarda en el dispositivo y envía al reconectar.
+  fs.setDoc(ref, data, { merge: true }).catch(e => {
+    S.conexion = "error"; S.errorMsg = e.code || "error"; render();
+    avisar(mensajeError(e.code));
+  });
+}
+const mensajeError = c => c === "permission-denied"
+  ? "Sin permiso. Revisa las reglas de Firestore y que el código del equipo tenga 10 o más caracteres."
+  : `No se pudo guardar (${c || "error"}). Revisa la conexión.`;
+
+function desconectar() {
+  S.unsubs.forEach(u => { try { u(); } catch { /* nada */ } });
+  S.unsubs = [];
+}
+
+async function conectar() {
+  if (!NUBE || !S.codigo) return;
+  desconectar();
+  S.dorms = {}; S.dosis = []; S.informes = []; S.cambios = [];
+  S.conexion = navigator.onLine ? "conectando" : "sinred"; render();
+  try {
+    const base = `https://www.gstatic.com/firebasejs/${FIREBASE_VERSION}`;
+    const [appMod, fs] = await Promise.all([
+      import(`${base}/firebase-app.js`),
+      import(`${base}/firebase-firestore.js`)
+    ]);
+    if (!FB) {
+      const app = appMod.initializeApp(FIREBASE_CONFIG);
+      let db;
+      try {
+        db = fs.initializeFirestore(app, {
+          localCache: fs.persistentLocalCache({ tabManager: fs.persistentMultipleTabManager() })
+        });
+      } catch { db = fs.getFirestore(app); }
+      FB = { fs, db };
+    }
+    escuchar();
+  } catch (e) {
+    S.conexion = "error"; S.errorMsg = "No se pudo cargar Firebase. Revisa la conexión."; render();
+  }
+}
+
+function escuchar() {
+  const { fs, db } = FB;
+  const col = n => fs.collection(db, "equipos", S.codigo, n);
+  const alError = e => { S.conexion = "error"; S.errorMsg = mensajeError(e.code); render(); };
+  const d30 = Date.now() - 30 * 864e5, d180 = Date.now() - 180 * 864e5;
+  const lista = snap => snap.docs.map(x => ({ id: x.id, ...x.data() }));
+  S.unsubs = [
+    fs.onSnapshot(col("dormitorios"), { includeMetadataChanges: true }, snap => {
+      const d = {}; snap.forEach(x => { d[x.id] = x.data(); });
+      S.dorms = d; S.pendiente = snap.metadata.hasPendingWrites;
+      S.conexion = navigator.onLine ? "online" : "sinred"; S.errorMsg = ""; render();
+    }, alError),
+    fs.onSnapshot(fs.query(col("dosis"), fs.where("ts", ">=", d30), fs.orderBy("ts", "desc"), fs.limit(500)),
+      snap => { S.dosis = lista(snap); render(); }, alError),
+    fs.onSnapshot(fs.query(col("informes"), fs.where("ts", ">=", d180), fs.orderBy("ts", "desc"), fs.limit(300)),
+      snap => { S.informes = lista(snap); render(); }, alError),
+    fs.onSnapshot(fs.query(col("cambios"), fs.orderBy("ts", "desc"), fs.limit(200)),
+      snap => { S.cambios = lista(snap); render(); }, alError)
+  ];
+}
+
+window.addEventListener("online", () => { if (NUBE && S.conexion !== "error") { S.conexion = "online"; render(); } });
+window.addEventListener("offline", () => { if (NUBE) { S.conexion = "sinred"; render(); } });
+
+/* =====================================================================
+   AVISOS Y HOJA
+   ===================================================================== */
+let avisoT;
+function avisar(msg) {
+  const a = $("#aviso");
+  a.textContent = msg; a.hidden = false;
+  clearTimeout(avisoT);
+  avisoT = setTimeout(() => { a.hidden = true; }, 3200);
+}
+function abrirHoja(titulo, html, estado) {
+  $("#hojaTitulo").innerHTML = esc(titulo) + (estado ? ` <span class="badge e-${estado}">${ETIQ[estado]}</span>` : "");
+  $("#hojaCuerpo").innerHTML = html;
+  const h = $("#hoja");
+  if (!h.open) h.showModal();
+  $("#hojaCuerpo").scrollTop = 0;
+}
+function cerrarHoja() { const h = $("#hoja"); if (h.open) h.close(); }
+$("#hoja").addEventListener("click", e => { if (e.target === $("#hoja")) cerrarHoja(); });
+
+/* =====================================================================
+   PIEZAS DE INTERFAZ
+   ===================================================================== */
+function radios(name, opts, val, clase = "opc", req = false) {
+  return `<div class="${clase}">` + opts.map(([v, t], i) =>
+    `<label><input type="radio" name="${name}" value="${esc(v)}" ${String(val ?? "") === String(v) ? "checked" : ""} ${req && i === 0 ? "required" : ""}><span>${esc(t)}</span></label>`
+  ).join("") + `</div>`;
+}
+const opcionesEquipo = () => EQUIPO.map(x => [x, x]);
+
+function etiquetaRed() {
+  if (!NUBE) return ["demo", "Demo local"];
+  if (S.conexion === "error") return ["err", "Error"];
+  if (S.conexion === "sinred") return ["off", "Sin conexión"];
+  if (S.conexion === "online") return S.pendiente ? ["pend", "Guardando…"] : ["ok", "En línea"];
+  return ["pend", "Conectando…"];
+}
+function htmlCab() {
+  const [clase, texto] = etiquetaRed();
+  return `<div class="cab-in">
+    <div class="marca"><span class="logo">KOPEK</span><span class="sub">Dormitorios</span></div>
+    <div class="cab-der">
+      <button type="button" class="red red-${clase}" data-accion="red">${texto}</button>
+      ${S.user ? `<button type="button" class="usr" data-accion="sesion" aria-label="Cambiar persona o código">${esc(S.user)}</button>` : ""}
+    </div></div>`;
+}
+function htmlNav() {
+  const items = [["tablero", "Tablero", ICO.tablero], ["dosis", "Dosis", ICO.pastilla], ["informes", "Informes", ICO.informe], ["historial", "Historial", ICO.reloj]];
+  return `<div class="nav-in">` + items.map(([id, t, ico]) =>
+    `<button type="button" class="nav-b" data-accion="tab" data-tab="${id}" ${S.tab === id ? 'aria-current="page"' : ""}>${ico}<span>${t}</span></button>`
+  ).join("") + `</div>`;
+}
+
+/* ---------- Entrada ---------- */
+function vistaEntrada() {
+  return `<section class="entrada"><div class="entrada-card">
+    <div class="logo">KOPEK</div>
+    <p class="sub">Dormitorios</p>
+    ${!NUBE ? `<p class="nota-demo"><b>Modo demostración.</b> Los datos se guardan solo en este dispositivo. Para que el equipo comparta la información, conecta la nube (instrucciones al inicio del archivo).</p>` : ""}
+    <form data-form="entrada">
+      <fieldset class="campo"><legend class="et">¿Quién eres?</legend>${radios("persona", opcionesEquipo(), S.user, "opc grande", true)}</fieldset>
+      ${NUBE ? `<div class="campo"><label class="et" for="cod">Código del equipo</label>
+        <input id="cod" name="codigo" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" required minlength="10" value="${esc(S.codigo)}">
+        <p class="ayuda">Mínimo 10 letras o números, sin espacios. Todos escriben el mismo. Compártelo solo en el grupo interno.</p></div>` : ""}
+      <button class="btn primario bloque">Entrar</button>
+    </form>
+    <p class="equipo">${textoEquipo()}</p>
+  </div></section>`;
+}
+function enviarEntrada(f) {
+  const fd = new FormData(f);
+  const persona = fd.get("persona");
+  if (!persona) return;
+  if (NUBE) {
+    const cod = limpiarCodigo(fd.get("codigo"));
+    if (cod.length < 10) { avisar("El código necesita al menos 10 letras o números."); return; }
+    S.codigo = cod; ls.set("kopek_codigo", cod);
+  }
+  S.user = persona; ls.set("kopek_persona", persona);
+  if (NUBE) conectar(); else demoCargar();
+  render();
+}
+
+/* ---------- Tablero ---------- */
+function tarjeta(d) {
+  const e = d.estado;
+  let cuerpo;
+  if (e === "ocupado") {
+    cuerpo = `<span class="nom">${esc(d.nombre || "Sin nombre")}</span>
+      ${d.raza ? `<span class="raza">${esc(d.raza)}</span>` : ""}
+      <span class="tags">${d.motivo ? `<span class="tag">${ETIQ_MOTIVO[d.motivo] || ""}</span>` : ""}${d.nivel ? `<span class="tag">Nivel ${esc(d.nivel)}</span>` : ""}${d.tratamiento ? `<span class="tag trat">${ICO.pastilla}Tratamiento</span>` : ""}</span>
+      ${d.alimento ? `<span class="ali">${esc(d.alimento)}</span>` : ""}`;
+  } else if (e === "limpieza") {
+    cuerpo = `<span class="libre">${esc(d.nota || "Pendiente")}</span>`;
+  } else {
+    cuerpo = `<span class="libre">Limpio y listo</span>`;
+  }
+  const lectura = e === "ocupado" ? `, ${d.nombre || "sin nombre"}${d.tratamiento ? ", con tratamiento" : ""}` : "";
+  return `<button type="button" class="tarj e-${e}" data-accion="dorm" data-n="${d.n}" aria-label="Dormitorio ${d.n}, ${ETIQ[e].toLowerCase()}${esc(lectura)}">
+    <span class="tarj-top"><span class="num">${d.n}</span><span class="est">${ETIQ[e]}</span></span>
+    <span class="tarj-cuerpo">${cuerpo}</span></button>`;
+}
+function vistaTablero() {
+  const todos = Array.from({ length: TOTAL_DORMITORIOS }, (_, i) => ({ n: i + 1, ...dormActual(i + 1) }));
+  const conTrat = d => d.estado === "ocupado" && d.tratamiento;
+  const cuenta = {
+    todos: todos.length,
+    ocupado: todos.filter(d => d.estado === "ocupado").length,
+    disponible: todos.filter(d => d.estado === "disponible").length,
+    limpieza: todos.filter(d => d.estado === "limpieza").length,
+    tratamiento: todos.filter(conTrat).length
+  };
+  const defs = [["todos", "Todos", ""], ["ocupado", "Ocupados", "var(--ocupado)"], ["disponible", "Disponibles", "var(--libre)"], ["limpieza", "En limpieza", "var(--limpieza)"], ["tratamiento", "Con tratamiento", "var(--acento)"]];
+  const lista = todos.filter(d => S.filtro === "todos" ? true : S.filtro === "tratamiento" ? conTrat(d) : d.estado === S.filtro);
+  return `<div class="tit"><div><h1>Tablero</h1><p>Se actualiza en el momento, no al final del turno.</p></div></div>
+    <div class="filtros" role="group" aria-label="Filtrar dormitorios">${defs.map(([id, t, c]) =>
+      `<button type="button" class="filtro" style="--c:${c}" data-accion="filtro" data-filtro="${id}" aria-pressed="${S.filtro === id}">${c ? '<span class="pt"></span>' : ""}${t} <b>${cuenta[id]}</b></button>`).join("")}</div>
+    ${lista.length ? `<div class="grid">${lista.map(tarjeta).join("")}</div>` : `<div class="vacio">Ningún dormitorio coincide con este filtro.</div>`}
+    <p class="equipo">${textoEquipo()}</p>`;
+}
+
+/* ---------- Dosis ---------- */
+function agrupar(lista) {
+  const g = []; let ult = null;
+  for (const x of lista) {
+    const dia = inicioDia(x.ts);
+    if (dia !== ult) { g.push({ dia, items: [] }); ult = dia; }
+    g[g.length - 1].items.push(x);
+  }
+  return g;
+}
+function filaDosis(x) {
+  const extra = [
+    `${x.omitida ? "Reportó" : "Dio"}: ${esc(x.por)}`,
+    x.reaccion && x.reaccion !== "Ninguna" ? `Reacción: ${esc(x.reaccion)}` : "",
+    x.detalle ? esc(x.detalle) : ""
+  ].filter(Boolean).join(" · ");
+  return `<li class="fila ${x.omitida ? "omitida" : ""}"><span class="hora">${horaDe(x.ts)}</span>
+    <span class="fila-c"><b>Dormitorio ${esc(x.dorm)}${x.perro ? " · " + esc(x.perro) : ""}</b>
+    <span>${esc(x.medicamento)}${x.dosis ? " · " + esc(x.dosis) : ""}</span>
+    <small>${x.omitida ? '<b class="marca-om">Dosis omitida</b> · ' : ""}${extra}</small></span></li>`;
+}
+function vistaDosis() {
+  const grupos = agrupar(S.dosis);
+  return `<div class="tit"><div><h1>Dosis</h1><p>Anota cada dosis en el momento en que la das: hora real, quién la dio y la reacción.</p></div>
+    <button type="button" class="btn primario" data-accion="dosis" data-n="0">${ICO.mas}Registrar dosis</button></div>
+    ${grupos.length ? grupos.map(g => `<h2 class="dia">${esc(etiquetaDia(g.dia))}</h2><ul class="lista">${g.items.map(filaDosis).join("")}</ul>`).join("")
+      : `<div class="vacio">Aún no hay dosis registradas.</div>`}`;
+}
+
+/* ---------- Informes ---------- */
+function listaInformes() {
+  const q = S.busqInf.trim().toLowerCase();
+  const items = S.informes.filter(x => !q || [x.paciente, x.raza, x.motivo, x.tratamiento, x.indicaciones, "dormitorio " + x.dorm].join(" ").toLowerCase().includes(q));
+  if (!items.length) return `<div class="vacio">${S.informes.length ? "Nada coincide con la búsqueda." : "Aún no hay informes médicos."}</div>`;
+  return items.map(x => {
+    const fecha = x.fecha ? new Date(x.fecha + "T12:00:00").toLocaleDateString("es-MX", { day: "numeric", month: "short", year: "numeric" }) : "";
+    const pe = [x.peso ? x.peso + " kg" : "", x.edad].filter(Boolean).join(" · ");
+    return `<article class="inf"><div class="inf-cab"><b>Dormitorio ${esc(x.dorm)} · ${esc(x.paciente)}${x.raza ? " (" + esc(x.raza) + ")" : ""}</b><span>${esc(fecha)}</span></div>
+      <dl>${pe ? `<dt>Peso y edad</dt><dd>${esc(pe)}</dd>` : ""}
+      <dt>Motivo</dt><dd>${esc(x.motivo)}</dd>
+      ${x.tratamiento ? `<dt>Tratamiento</dt><dd>${esc(x.tratamiento)}</dd>` : ""}
+      ${x.indicaciones ? `<dt>Indicaciones</dt><dd>${esc(x.indicaciones)}</dd>` : ""}</dl>
+      <small>Revisó: ${esc(x.por)}</small></article>`;
+  }).join("");
+}
+function vistaInformes() {
+  return `<div class="tit"><div><h1>Informes</h1><p>Se llena en cada revisión, no solo cuando hay problema.</p></div>
+    <button type="button" class="btn primario" data-accion="informe" data-n="0">${ICO.mas}Nuevo informe</button></div>
+    <input id="busqInf" class="buscar" type="search" placeholder="Buscar por perro, raza o motivo" value="${esc(S.busqInf)}" aria-label="Buscar informes">
+    <div id="listaInf">${listaInformes()}</div>`;
+}
+
+/* ---------- Historial ---------- */
+function vistaHistorial() {
+  const grupos = agrupar(S.cambios);
+  return `<div class="tit"><div><h1>Historial</h1><p>Quién cambió qué en los dormitorios, y a qué hora.</p></div></div>
+    ${grupos.length ? grupos.map(g => `<h2 class="dia">${esc(etiquetaDia(g.dia))}</h2><ul class="lista">${g.items.map(x =>
+      `<li class="fila"><span class="hora">${horaDe(x.ts)}</span><span class="fila-c"><b>Dormitorio ${esc(x.dorm)}</b><span>${esc(x.texto)}</span><small>${esc(x.por)}</small></span></li>`).join("")}</ul>`).join("")
+      : `<div class="vacio">Todavía no hay cambios registrados.</div>`}`;
+}
+
+/* ---------- Render principal ---------- */
+function render() {
+  const cab = $("#cab"), nav = $("#nav"), app = $("#app");
+  const dentro = S.user && (!NUBE || S.codigo);
+  document.body.classList.toggle("sin-nav", !dentro);
+  if (!dentro) {
+    cab.hidden = true; nav.hidden = true;
+    app.style.padding = "0"; app.style.maxWidth = "none";
+    if (!app.querySelector(".entrada")) app.innerHTML = vistaEntrada();
+    return;
+  }
+  cab.hidden = false; nav.hidden = false;
+  app.style.padding = ""; app.style.maxWidth = "";
+  cab.innerHTML = htmlCab();
+  nav.innerHTML = htmlNav();
+  const vistas = { tablero: vistaTablero, dosis: vistaDosis, informes: vistaInformes, historial: vistaHistorial };
+  const y = window.scrollY;
+  const ae = document.activeElement;
+  const foco = ae && ae.id === "busqInf" ? ae.selectionStart : null;
+  app.innerHTML = vistas[S.tab]();
+  window.scrollTo(0, y);
+  if (foco !== null) { const i = $("#busqInf"); if (i) { i.focus(); i.setSelectionRange(foco, foco); } }
+}
+
+/* =====================================================================
+   HOJA: DORMITORIO
+   ===================================================================== */
+function abrirDorm(n, { ingreso = false } = {}) {
+  const d = dormActual(n);
+  const meta = d.por && d.ts ? `<p class="meta">Última actualización: ${esc(d.por)}, ${hace(d.ts)}.</p>` : "";
+
+  if (d.estado === "ocupado" || ingreso) {
+    const html = `<form data-form="dorm" data-n="${n}" data-ingreso="${ingreso ? 1 : 0}">
+      <div class="campo"><label class="et" for="f-nombre">Nombre del perro</label>
+        <input id="f-nombre" name="nombre" type="text" required autocomplete="off" value="${esc(ingreso ? "" : d.nombre)}"></div>
+      <div class="campo"><label class="et" for="f-raza">Raza</label>
+        <input id="f-raza" name="raza" type="text" autocomplete="off" value="${esc(ingreso ? "" : d.raza)}"></div>
+      <fieldset class="campo"><legend class="et">Motivo</legend>${radios("motivo", [["pension", "Pensión"], ["entrenamiento", "Entrenamiento"]], ingreso ? "" : d.motivo, "seg", true)}</fieldset>
+      <fieldset class="campo"><legend class="et">Nivel de entrenamiento</legend>${radios("nivel", [["", "Sin nivel"], ["1", "Nivel 1"], ["2", "Nivel 2"]], ingreso ? "" : d.nivel, "seg")}</fieldset>
+      <div class="campo"><label class="et" for="f-ali">Cantidad de alimento</label>
+        <input id="f-ali" name="alimento" type="text" autocomplete="off" placeholder="Ej. 2 tazas, mañana y tarde" value="${esc(ingreso ? "" : d.alimento)}"></div>
+      <div class="campo"><label class="et" for="f-trat">Tratamiento</label>
+        <textarea id="f-trat" name="tratamiento" placeholder="Déjalo vacío si no lleva">${esc(ingreso ? "" : d.tratamiento)}</textarea></div>
+      <button class="btn primario bloque">${ingreso ? "Ingresar perro" : "Guardar cambios"}</button>
+    </form>
+    ${ingreso ? "" : `<hr class="sep">
+      <div class="fila-btn">
+        <button type="button" class="btn" data-accion="dosis" data-n="${n}">${ICO.pastilla}Registrar dosis</button>
+        <button type="button" class="btn" data-accion="informe" data-n="${n}">${ICO.informe}Nuevo informe</button>
+      </div>
+      <button type="button" class="btn peligro bloque" data-accion="salio" data-n="${n}">Salió el perro</button>`}
+    ${meta}`;
+    abrirHoja(`Dormitorio ${n}`, html, "ocupado");
+    return;
+  }
+
+  if (d.estado === "limpieza") {
+    abrirHoja(`Dormitorio ${n}`, `
+      <div class="caja"><p><b>No está disponible.</b> Un dormitorio sucio o en mantenimiento no se asigna.</p></div>
+      <button type="button" class="btn primario bloque" data-accion="listo" data-n="${n}" style="margin-bottom:16px">Limpio y listo</button>
+      <form data-form="limpieza" data-n="${n}">
+        <div class="campo"><label class="et" for="f-nota">Qué falta</label>
+          <textarea id="f-nota" name="nota" placeholder="Ej. Falta desinfectar, reparar la puerta">${esc(d.nota)}</textarea></div>
+        <button class="btn bloque">Guardar nota</button>
+      </form>${meta}`, "limpieza");
+    return;
+  }
+
+  abrirHoja(`Dormitorio ${n}`, `
+    <div class="caja info"><p>Limpio y listo para asignar.</p></div>
+    <button type="button" class="btn primario bloque" data-accion="ingresar" data-n="${n}" style="margin-bottom:16px">Ingresar perro</button>
+    <hr class="sep">
+    <form data-form="limpieza" data-n="${n}" data-enviar="1">
+      <div class="campo"><label class="et" for="f-nota">Si hay que limpiarlo o repararlo</label>
+        <textarea id="f-nota" name="nota" placeholder="Ej. Puerta floja, falta desinfectar"></textarea></div>
+      <button class="btn bloque">Mandar a limpieza o mantenimiento</button>
+    </form>${meta}`, "disponible");
+}
+
+function registrarCambio(n, texto) {
+  escribir("cambios", null, { ts: Date.now(), por: S.user, dorm: n, texto });
+}
+function guardarDorm(f) {
+  const n = Number(f.dataset.n), ingreso = f.dataset.ingreso === "1";
+  const fd = new FormData(f);
+  const nuevo = {};
+  CAMPOS.forEach(([k]) => { nuevo[k] = String(fd.get(k) ?? "").trim(); });
+  if (!nuevo.nombre) { avisar("Escribe el nombre del perro."); return; }
+  const act = dormActual(n);
+  const patch = {}, cambiados = [];
+  CAMPOS.forEach(([k, etiqueta]) => {
+    if ((act[k] || "") !== nuevo[k]) { patch[k] = nuevo[k]; cambiados.push(etiqueta); }
+  });
+  if (ingreso) { patch.estado = "ocupado"; patch.nota = ""; }
+  if (!Object.keys(patch).length) { cerrarHoja(); return; }
+  patch.por = S.user; patch.ts = Date.now();
+  escribir("dormitorios", n, patch);
+  registrarCambio(n, ingreso
+    ? `Ingresó ${nuevo.nombre}${nuevo.raza ? ` (${nuevo.raza})` : ""} · ${ETIQ_MOTIVO[nuevo.motivo] || ""}`
+    : `Actualizó ${cambiados.join(", ")}`);
+  cerrarHoja(); avisar("Guardado");
+}
+function guardarLimpieza(f) {
+  const n = Number(f.dataset.n);
+  const nota = String(new FormData(f).get("nota") || "").trim();
+  const enviar = f.dataset.enviar === "1";
+  escribir("dormitorios", n, {
+    estado: "limpieza", nota: nota || "Pendiente de limpieza", por: S.user, ts: Date.now()
+  });
+  registrarCambio(n, enviar ? `En limpieza o mantenimiento${nota ? ": " + nota : ""}` : `Nota de limpieza: ${nota || "sin detalle"}`);
+  cerrarHoja(); avisar(enviar ? "Dormitorio en limpieza" : "Nota guardada");
+}
+function marcarListo(n) {
+  if (!confirm("¿Está limpio y sin mantenimiento pendiente? Solo entonces se marca como disponible.")) return;
+  escribir("dormitorios", n, { estado: "disponible", nota: "", por: S.user, ts: Date.now() });
+  registrarCambio(n, "Limpio y listo. Disponible");
+  cerrarHoja(); avisar("Dormitorio disponible");
+}
+function salio(n) {
+  const d = dormActual(n);
+  const msg = d.tratamiento
+    ? "Este perro tiene un tratamiento anotado. ¿Ya se entregó y quedó registrado? El dormitorio pasa a limpieza."
+    : "¿Salió el perro? El dormitorio pasa a limpieza.";
+  if (!confirm(msg)) return;
+  escribir("dormitorios", n, {
+    estado: "limpieza", nombre: "", raza: "", motivo: "", nivel: "", alimento: "", tratamiento: "",
+    nota: "Pendiente de limpieza", por: S.user, ts: Date.now()
+  });
+  registrarCambio(n, `Salió ${d.nombre || "el perro"}. Pasa a limpieza`);
+  cerrarHoja(); avisar("Dormitorio en limpieza");
+}
+
+/* =====================================================================
+   HOJA: DOSIS
+   ===================================================================== */
+function hintDosis(n) {
+  const d = dormActual(n);
+  const ultima = S.dosis.find(x => String(x.dorm) === String(n) && !x.omitida);
+  let h = d.tratamiento
+    ? `<p><b>Tratamiento anotado:</b> ${esc(d.tratamiento)}</p>`
+    : `<p>Este dormitorio no tiene tratamiento anotado. Si dudas, pregunta antes de dar.</p>`;
+  if (ultima) h += `<p><b>Última dosis:</b> ${esc(ultima.medicamento)}${ultima.dosis ? " " + esc(ultima.dosis) : ""}, ${etiquetaDia(ultima.ts).toLowerCase()} a las ${horaDe(ultima.ts)} (${esc(ultima.por)}).</p>`;
+  return h;
+}
+function abrirDosis(n) {
+  const oc = dormsOcupados();
+  if (!oc.length) {
+    abrirHoja("Registrar dosis", `<div class="vacio">No hay dormitorios ocupados. Primero ingresa al perro en el tablero.</div>`);
+    return;
+  }
+  const sel = oc.some(d => d.n === n) ? n : oc[0].n;
+  const ahora = new Date();
+  const meds = [...new Set(S.dosis.map(x => x.medicamento).filter(Boolean))].slice(0, 30);
+  abrirHoja("Registrar dosis", `<form data-form="dosis">
+    <div class="campo"><label class="et" for="d-dorm">Dormitorio</label>
+      <select id="d-dorm" name="dorm">${oc.map(d => `<option value="${d.n}" ${d.n === sel ? "selected" : ""}>${d.n} · ${esc(d.nombre || "Sin nombre")}</option>`).join("")}</select></div>
+    <div class="caja info" id="d-hint">${hintDosis(sel)}</div>
+    <p class="ayuda" style="margin:-6px 0 14px">Antes de dar revisa: perro, frasco, dosis y hora.</p>
+    <div class="campo"><label class="et" for="d-med">Medicamento</label>
+      <input id="d-med" name="medicamento" type="text" list="d-meds" required autocomplete="off" placeholder="Ej. Amoxicilina">
+      <datalist id="d-meds">${meds.map(m => `<option value="${esc(m)}">`).join("")}</datalist></div>
+    <div class="campo"><label class="et" for="d-dosis">Dosis exacta</label>
+      <input id="d-dosis" name="dosis" type="text" autocomplete="off" placeholder="Ej. 250 mg"></div>
+    <div class="campo"><label class="et" for="d-hora" id="d-hora-et">Hora real en que se dio</label>
+      <input id="d-hora" name="hora" type="time" required value="${pad(ahora.getHours())}:${pad(ahora.getMinutes())}"></div>
+    <div class="campo"><label class="et" for="d-quien" id="d-quien-et">Quién la dio</label>
+      <select id="d-quien" name="quien">${EQUIPO.map(x => `<option ${x === S.user ? "selected" : ""}>${esc(x)}</option>`).join("")}</select></div>
+    <fieldset class="campo"><legend class="et">Reacción</legend>${radios("reaccion", REACCIONES.map(x => [x, x]), "Ninguna")}</fieldset>
+    <div class="campo"><label class="et" for="d-det">Detalle (opcional)</label>
+      <input id="d-det" name="detalle" type="text" autocomplete="off"></div>
+    <div class="campo"><label class="check"><input type="checkbox" name="omitida" value="1"><span>Se pasó esta dosis (reportar)</span></label></div>
+    <div class="caja" id="d-omitida" hidden><p><b>No la dupliques para compensar.</b> Avisa de inmediato en el grupo interno. Pon aquí la hora en que le tocaba.</p></div>
+    <button class="btn primario bloque">Guardar dosis</button>
+  </form>`);
+}
+function guardarDosis(f) {
+  const fd = new FormData(f);
+  const n = Number(fd.get("dorm"));
+  const [h, m] = String(fd.get("hora")).split(":").map(Number);
+  const t = new Date(); t.setHours(h, m, 0, 0);
+  let ts = t.getTime();
+  if (ts > Date.now() + 10 * 6e4) ts -= 864e5; // hora de anoche, si se anota pasada la medianoche
+  const omitida = fd.get("omitida") === "1";
+  escribir("dosis", null, {
+    ts, dorm: n, perro: dormActual(n).nombre || "",
+    medicamento: String(fd.get("medicamento")).trim(), dosis: String(fd.get("dosis") || "").trim(),
+    por: String(fd.get("quien")), reaccion: String(fd.get("reaccion") || "Ninguna"),
+    detalle: String(fd.get("detalle") || "").trim(), omitida
+  });
+  cerrarHoja(); avisar(omitida ? "Dosis omitida reportada" : "Dosis guardada");
+  if (S.tab !== "dosis") { S.tab = "dosis"; render(); }
+}
+
+/* =====================================================================
+   HOJA: INFORME MÉDICO
+   ===================================================================== */
+function abrirInforme(n) {
+  const d = n ? dormActual(n) : {};
+  const opts = Array.from({ length: TOTAL_DORMITORIOS }, (_, i) => i + 1).map(k => {
+    const x = dormActual(k);
+    return `<option value="${k}" ${k === n ? "selected" : ""}>${k} · ${x.estado === "ocupado" ? esc(x.nombre || "Sin nombre") : "libre"}</option>`;
+  }).join("");
+  abrirHoja("Informe médico", `<form data-form="informe">
+    <div class="campo"><label class="et" for="i-dorm">Dormitorio</label>
+      <select id="i-dorm" name="dorm" required><option value="">Elige el dormitorio</option>${opts}</select></div>
+    <div class="campo"><label class="et" for="i-fecha">Fecha de la revisión</label>
+      <input id="i-fecha" name="fecha" type="date" required value="${isoFecha()}"></div>
+    <div class="campo"><label class="et" for="i-pac">Paciente</label>
+      <input id="i-pac" name="paciente" type="text" required autocomplete="off" value="${esc(d.nombre || "")}"></div>
+    <div class="campo"><label class="et" for="i-raza">Raza</label>
+      <input id="i-raza" name="raza" type="text" autocomplete="off" value="${esc(d.raza || "")}"></div>
+    <div class="fila-btn">
+      <div><label class="et" for="i-peso">Peso (kg)</label><input id="i-peso" name="peso" type="text" inputmode="decimal" autocomplete="off"></div>
+      <div><label class="et" for="i-edad">Edad</label><input id="i-edad" name="edad" type="text" autocomplete="off" placeholder="Ej. 3 años"></div>
+    </div>
+    <div class="campo"><label class="et" for="i-mot">Motivo de la revisión</label>
+      <textarea id="i-mot" name="motivo" required></textarea>
+      <p class="ayuda">Escribe lo que ves, no lo que crees. Por ejemplo: «Se lame la pata derecha, cojea», no «anda raro».</p></div>
+    <div class="campo"><label class="et" for="i-trat">Tratamiento</label>
+      <textarea id="i-trat" name="tratamiento"></textarea>
+      <p class="ayuda">Qué se le dio. Por ejemplo: Amoxicilina 250 mg, 8:00 am.</p></div>
+    <div class="campo"><label class="et" for="i-ind">Indicaciones adicionales</label>
+      <textarea id="i-ind" name="indicaciones"></textarea></div>
+    <div class="campo"><label class="et" for="i-quien">Quién revisó</label>
+      <select id="i-quien" name="quien">${EQUIPO.map(x => `<option ${x === S.user ? "selected" : ""}>${esc(x)}</option>`).join("")}</select></div>
+    <button class="btn primario bloque">Guardar informe</button>
+  </form>`);
+}
+function guardarInforme(f) {
+  const fd = new FormData(f);
+  const v = k => String(fd.get(k) ?? "").trim();
+  escribir("informes", null, {
+    ts: Date.now(), fecha: v("fecha"), dorm: Number(v("dorm")),
+    paciente: v("paciente"), raza: v("raza"), peso: v("peso"), edad: v("edad"),
+    motivo: v("motivo"), tratamiento: v("tratamiento"), indicaciones: v("indicaciones"), por: v("quien")
+  });
+  cerrarHoja(); avisar("Informe guardado");
+  if (S.tab !== "informes") { S.tab = "informes"; render(); }
+}
+
+/* =====================================================================
+   HOJA: PERSONA Y CÓDIGO
+   ===================================================================== */
+function abrirSesion() {
+  abrirHoja("Quién usa este teléfono", `<form data-form="sesion">
+    <fieldset class="campo"><legend class="et">Persona</legend>${radios("persona", opcionesEquipo(), S.user, "opc grande", true)}</fieldset>
+    ${NUBE ? `<div class="campo"><label class="et" for="s-cod">Código del equipo</label>
+      <input id="s-cod" name="codigo" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" required minlength="10" value="${esc(S.codigo)}">
+      <p class="ayuda">Si lo cambias, verás los datos de ese código.</p></div>` : ""}
+    <button class="btn primario bloque">Guardar</button>
+  </form><p class="equipo">${textoEquipo()}</p>`);
+}
+function enviarSesion(f) {
+  const fd = new FormData(f);
+  const persona = fd.get("persona");
+  if (!persona) return;
+  S.user = persona; ls.set("kopek_persona", persona);
+  if (NUBE) {
+    const cod = limpiarCodigo(fd.get("codigo"));
+    if (cod.length < 10) { avisar("El código necesita al menos 10 letras o números."); return; }
+    if (cod !== S.codigo) { S.codigo = cod; ls.set("kopek_codigo", cod); conectar(); }
+  }
+  cerrarHoja(); render(); avisar(`Hola, ${persona}`);
+}
+
+/* =====================================================================
+   EVENTOS
+   ===================================================================== */
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-accion]");
+  if (!b) return;
+  const n = Number(b.dataset.n) || 0;
+  switch (b.dataset.accion) {
+    case "tab": S.tab = b.dataset.tab; render(); window.scrollTo(0, 0); break;
+    case "filtro": S.filtro = b.dataset.filtro; render(); break;
+    case "dorm": abrirDorm(n); break;
+    case "ingresar": abrirDorm(n, { ingreso: true }); break;
+    case "listo": marcarListo(n); break;
+    case "salio": salio(n); break;
+    case "dosis": abrirDosis(n); break;
+    case "informe": abrirInforme(n); break;
+    case "sesion": abrirSesion(); break;
+    case "cerrar": cerrarHoja(); break;
+    case "red":
+      avisar(!NUBE
+        ? "Modo demostración: los datos se guardan solo en este dispositivo. Conecta la nube para compartir con el equipo."
+        : S.conexion === "error" ? (S.errorMsg || "Error de conexión.")
+        : S.conexion === "sinred" ? "Sin conexión. Lo que anotes se enviará al reconectar."
+        : "Conectado. Los cambios se ven al instante en los demás teléfonos.");
+      break;
+  }
+});
+document.addEventListener("submit", e => {
+  const f = e.target.closest("form[data-form]");
+  if (!f) return;
+  e.preventDefault();
+  const manejadores = { entrada: enviarEntrada, sesion: enviarSesion, dorm: guardarDorm, limpieza: guardarLimpieza, dosis: guardarDosis, informe: guardarInforme };
+  (manejadores[f.dataset.form] || (() => {}))(f);
+});
+document.addEventListener("change", e => {
+  const t = e.target, tipo = t.form && t.form.dataset.form;
+  if (t.name === "dorm" && tipo === "dosis") $("#d-hint").innerHTML = hintDosis(Number(t.value));
+  if (t.name === "dorm" && tipo === "informe" && t.value) {
+    const d = dormActual(Number(t.value));
+    t.form.elements.paciente.value = d.nombre || "";
+    t.form.elements.raza.value = d.raza || "";
+  }
+  if (t.name === "omitida") {
+    $("#d-omitida").hidden = !t.checked;
+    $("#d-hora-et").textContent = t.checked ? "Hora en que le tocaba" : "Hora real en que se dio";
+    $("#d-quien-et").textContent = t.checked ? "Quién lo reporta" : "Quién la dio";
+  }
+});
+document.addEventListener("input", e => {
+  if (e.target.id === "busqInf") { S.busqInf = e.target.value; $("#listaInf").innerHTML = listaInformes(); }
+});
+
+/* =====================================================================
+   INICIO
+   ===================================================================== */
+if (!NUBE) demoCargar();
+render();
+if (NUBE && S.codigo) conectar();
+</script>
+</body>
+</html>
