@@ -24,7 +24,8 @@ CÓMO CONECTARLA A LA NUBE GRATIS (Firebase, plan Spark, sin tarjeta)
 1. Entra a https://console.firebase.google.com con una cuenta de Google
    y crea un proyecto (ej. "kopek-dormitorios"). Desactiva Analytics.
 2. Menú Compilación > Firestore Database > Crear base de datos.
-   Elige "modo de producción" y la región más cercana.
+   Elige "modo de producción" y la región más cercana. Si te pide
+   elegir edición, elige "Standard".
 3. En Firestore, pestaña "Reglas", borra lo que haya, pega esto y
    pulsa "Publicar":
 
@@ -42,6 +43,8 @@ CÓMO CONECTARLA A LA NUBE GRATIS (Firebase, plan Spark, sin tarjeta)
 5. Pega esos valores abajo, en FIREBASE_CONFIG, y guarda el archivo.
    Cambia SOLO los textos entre comillas. No copies las líneas que
    empiezan con "import" ni con "const app": rompen la página.
+   Para guardar datos lo único indispensable es projectId. Los textos
+   de ejemplo (tu-proyecto, AIza..., 123456789) NO son de tu proyecto.
 6. Publica el archivo con el nombre index.html (por ejemplo en
    GitHub Pages) y comparte el enlace en el grupo interno.
 7. Cada persona abre el enlace, elige su nombre y escribe el mismo
@@ -184,6 +187,9 @@ textarea{min-height:78px;resize:vertical}
 .fila-btn{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:0 0 12px}
 .sep{border:0;border-top:1px solid var(--linea);margin:18px 0}
 .meta{color:var(--tinta-2);font-size:14px;margin:14px 0 0}
+.diag{display:grid;grid-template-columns:max-content 1fr;gap:8px 16px;margin:0 0 16px}
+.diag dt{color:var(--tinta-2);font-weight:600}
+.diag dd{margin:0;font-weight:600;overflow-wrap:anywhere}
 
 /* ---------- Hoja (ventana) ---------- */
 dialog{border:0;padding:0;width:100%;max-width:560px;margin:auto auto 0;border-radius:16px 16px 0 0;background:var(--papel);color:var(--tinta);max-height:92dvh;overflow:hidden}
@@ -232,8 +238,8 @@ dialog::backdrop{background:rgba(20,28,34,.6)}
     d.innerHTML =
       '<h1 style="margin:0 0 10px;font-size:26px">KOPEK no pudo iniciar</h1>' +
       '<p>Casi siempre pasa porque los datos de Firebase quedaron mal pegados en el archivo <b>index.html</b>.</p>' +
-      '<p>Ábrelo, busca <b>FIREBASE_CONFIG</b> y déjalo con esta forma. Cambia solo lo que está entre comillas:</p>' +
-      '<pre style="background:#F1F5F7;border:1px solid #C9D2D7;border-radius:8px;padding:12px;overflow:auto;font-size:14px">const FIREBASE_CONFIG = {\n  apiKey: "AIza...",\n  authDomain: "tu-proyecto.firebaseapp.com",\n  projectId: "tu-proyecto",\n  storageBucket: "tu-proyecto.firebasestorage.app",\n  messagingSenderId: "123456789",\n  appId: "1:123456789:web:abc123"\n};</pre>' +
+      '<p>Ábrelo, busca <b>FIREBASE_CONFIG</b> y déjalo con esta forma. Cambia solo lo que está entre comillas. Los textos entre &lt; &gt; son ejemplos: reemplázalos por los de tu proyecto:</p>' +
+      '<pre style="background:#F1F5F7;border:1px solid #C9D2D7;border-radius:8px;padding:12px;overflow:auto;font-size:14px">const FIREBASE_CONFIG = {\n  apiKey: "<tu apiKey>",\n  authDomain: "<tu-proyecto>.firebaseapp.com",\n  projectId: "<tu-proyecto>",\n  appId: "<tu appId>"\n};</pre>' +
       '<p>No pegues las líneas que empiezan con <b>import</b> ni con <b>const app</b>.</p>' +
       '<p style="color:#4A5A64;font-size:14px">Detalle técnico: <code id="kopek-falla-det"></code></p>';
     document.body.appendChild(d);
@@ -272,21 +278,24 @@ const TOTAL_DORMITORIOS = 26;
 // Pega aquí los datos de tu proyecto de Firebase (paso 4 de las instrucciones).
 // Cambia SOLO los textos entre comillas. No borres comillas ni comas.
 const FIREBASE_CONFIG = {
-  apiKey: "AIza...",
-  authDomain: "tu-proyecto.firebaseapp.com",
-  projectId: "tu-proyecto",
-  storageBucket: "tu-proyecto.firebasestorage.app",
-  messagingSenderId: "123456789",
-  appId: "1:123456789:web:abc123"
+  apiKey: "PEGA_AQUI",
+  authDomain: "kopek-dormitorios.firebaseapp.com",
+  projectId: "kopek-dormitorios",
+  appId: "PEGA_AQUI"
 };
 const FIREBASE_VERSION = "10.14.1";
 // Acepta también el nombre "firebaseConfig", que es el que muestra la consola de Firebase.
 const CONFIG = (typeof FIREBASE_CONFIG !== "undefined" && FIREBASE_CONFIG) ||
                (typeof firebaseConfig !== "undefined" && firebaseConfig) || {};
-const CLAVES_OBLIGATORIAS = ["apiKey", "projectId", "appId"];
-const _llenas = CLAVES_OBLIGATORIAS.filter(k => CONFIG[k] && !/^PEGA/i.test(CONFIG[k])).length;
-const NUBE = _llenas === CLAVES_OBLIGATORIAS.length;
-const CONFIG_INCOMPLETA = _llenas > 0 && !NUBE;
+// Valores que NO son de un proyecto real: los "PEGA_AQUI" y los ejemplos de las instrucciones.
+const _vacio = v => !v || /^PEGA/i.test(String(v));
+const _ejemplo = v => /tu-proyecto|<tu|^AIza\.\.\.|123456789|abc123/i.test(String(v || ""));
+const _real = v => !_vacio(v) && !_ejemplo(v);
+// Firestore solo necesita projectId. apiKey y appId no se usan para guardar datos.
+const NUBE = _real(CONFIG.projectId);
+const CONFIG_EJEMPLO = !NUBE && Object.values(CONFIG).some(_ejemplo);
+const CONFIG_INCOMPLETA = !NUBE && !CONFIG_EJEMPLO && Object.values(CONFIG).some(v => !_vacio(v));
+const configLimpia = () => Object.fromEntries(Object.entries(CONFIG).filter(([, v]) => _real(v)));
 
 /* =====================================================================
    UTILIDADES
@@ -343,7 +352,9 @@ const S = {
   dorms: {}, dosis: [], informes: [], cambios: [],
   tab: "tablero", filtro: "todos", busqInf: "",
   conexion: NUBE ? "conectando" : "demo",
-  pendiente: false, errorMsg: "", unsubs: []
+  pendiente: false, errorMsg: "", unsubs: [],
+  enviando: 0, lento: false, ultimoOk: 0,
+  desdeCache: null, sinServidor: false, vigilaServidor: null, ultimoLog: ""
 };
 const dormActual = n => ({ estado: "disponible", ...(S.dorms[n] || {}) });
 const dormsOcupados = () => Array.from({ length: TOTAL_DORMITORIOS }, (_, i) => i + 1)
@@ -383,9 +394,25 @@ function escribir(col, id, data) {
     ? fs.doc(db, "equipos", S.codigo, col, String(id))
     : fs.doc(fs.collection(db, "equipos", S.codigo, col));
   // Sin await: con mala señal Firestore guarda en el dispositivo y envía al reconectar.
-  fs.setDoc(ref, data, { merge: true }).catch(e => {
-    S.conexion = "error"; S.errorMsg = e.code || "error"; render();
-    avisar(mensajeError(e.code));
+  // Aquí llevamos la cuenta de lo que el servidor ya confirmó, para no fingir que todo llegó.
+  S.enviando++;
+  const vigila = setTimeout(() => {
+    if (S.enviando > 0) {
+      S.lento = true; render();
+      avisar("Este cambio aún no llega a la nube; el equipo todavía no lo ve. Toca el círculo de estado para ver por qué.");
+    }
+  }, 8000);
+  fs.setDoc(ref, data, { merge: true }).then(() => {
+    clearTimeout(vigila);
+    S.enviando = Math.max(0, S.enviando - 1);
+    S.ultimoOk = Date.now();
+    if (S.enviando === 0 && S.lento) { S.lento = false; avisar("Ya se envió al equipo."); }
+    render();
+  }).catch(e => {
+    clearTimeout(vigila);
+    S.enviando = Math.max(0, S.enviando - 1);
+    S.conexion = "error"; S.errorMsg = mensajeError(e.code); render();
+    avisar(S.errorMsg);
   });
 }
 const mensajeError = c => c === "permission-denied"
@@ -397,8 +424,24 @@ function desconectar() {
   S.unsubs = [];
 }
 
+function capturarAvisosDeFirebase() {
+  if (window.__logHook) return;
+  window.__logHook = true;
+  ["warn", "error"].forEach(nombre => {
+    const original = console[nombre].bind(console);
+    console[nombre] = (...args) => {
+      try {
+        const texto = args.map(a => (a && a.message) || String(a)).join(" ");
+        if (/firestore|firebase/i.test(texto)) S.ultimoLog = texto.slice(0, 420);
+      } catch { /* nada */ }
+      original(...args);
+    };
+  });
+}
+
 async function conectar() {
   if (!NUBE || !S.codigo) return;
+  capturarAvisosDeFirebase();
   desconectar();
   S.dorms = {}; S.dosis = []; S.informes = []; S.cambios = [];
   S.conexion = navigator.onLine ? "conectando" : "sinred"; render();
@@ -409,11 +452,13 @@ async function conectar() {
       import(`${base}/firebase-firestore.js`)
     ]);
     if (!FB) {
-      const app = appMod.initializeApp(CONFIG);
+      const app = appMod.initializeApp(configLimpia());
       let db;
       try {
         db = fs.initializeFirestore(app, {
-          localCache: fs.persistentLocalCache({ tabManager: fs.persistentMultipleTabManager() })
+          localCache: fs.persistentLocalCache({ tabManager: fs.persistentMultipleTabManager() }),
+          // Si la red (Wi-Fi con filtros, antivirus, proxy) bloquea la conexión normal, usa otra vía.
+          experimentalAutoDetectLongPolling: true
         });
       } catch { db = fs.getFirestore(app); }
       FB = { fs, db };
@@ -434,6 +479,8 @@ function escuchar() {
     fs.onSnapshot(col("dormitorios"), { includeMetadataChanges: true }, snap => {
       const d = {}; snap.forEach(x => { d[x.id] = x.data(); });
       S.dorms = d; S.pendiente = snap.metadata.hasPendingWrites;
+      S.desdeCache = snap.metadata.fromCache;
+      if (!snap.metadata.fromCache) { S.sinServidor = false; S.ultimoOk = S.ultimoOk || Date.now(); }
       S.conexion = navigator.onLine ? "online" : "sinred"; S.errorMsg = ""; render();
     }, alError),
     fs.onSnapshot(fs.query(col("dosis"), fs.where("ts", ">=", d30), fs.orderBy("ts", "desc"), fs.limit(500)),
@@ -443,6 +490,12 @@ function escuchar() {
     fs.onSnapshot(fs.query(col("cambios"), fs.orderBy("ts", "desc"), fs.limit(200)),
       snap => { S.cambios = lista(snap); render(); }, alError)
   ];
+  // Si a los 10 s seguimos leyendo solo lo guardado en el teléfono, el servidor no está respondiendo.
+  S.desdeCache = null; S.sinServidor = false;
+  clearTimeout(S.vigilaServidor);
+  S.vigilaServidor = setTimeout(() => {
+    if (S.desdeCache !== false && navigator.onLine) { S.sinServidor = true; render(); }
+  }, 10000);
 }
 
 window.addEventListener("online", () => { if (NUBE && S.conexion !== "error") { S.conexion = "online"; render(); } });
@@ -481,8 +534,13 @@ const opcionesEquipo = () => EQUIPO.map(x => [x, x]);
 function etiquetaRed() {
   if (!NUBE) return ["demo", "Demo local"];
   if (S.conexion === "error") return ["err", "Error"];
+  if (S.sinServidor) return ["err", "Sin servidor"];
+  if (S.lento && S.enviando > 0) return ["err", "Sin enviar"];
   if (S.conexion === "sinred") return ["off", "Sin conexión"];
-  if (S.conexion === "online") return S.pendiente ? ["pend", "Guardando…"] : ["ok", "En línea"];
+  if (S.conexion === "online") {
+    if (S.desdeCache !== false) return ["pend", "Conectando…"]; // aún solo se ve lo guardado en este teléfono
+    return (S.enviando > 0 || S.pendiente) ? ["pend", "Enviando…"] : ["ok", "Sincronizado"];
+  }
   return ["pend", "Conectando…"];
 }
 function htmlCab() {
@@ -506,8 +564,9 @@ function vistaEntrada() {
   return `<section class="entrada"><div class="entrada-card">
     <div class="logo">KOPEK</div>
     <p class="sub">Dormitorios</p>
-    ${CONFIG_INCOMPLETA ? `<p class="nota-demo"><b>Faltan datos de Firebase.</b> Revisa que apiKey, projectId y appId en FIREBASE_CONFIG no digan PEGA_AQUI. Mientras tanto la app funciona en modo demostración.</p>` : ""}
-    ${!NUBE && !CONFIG_INCOMPLETA ? `<p class="nota-demo"><b>Modo demostración.</b> Los datos se guardan solo en este dispositivo. Para que el equipo comparta la información, conecta la nube (instrucciones al inicio del archivo).</p>` : ""}
+    ${CONFIG_EJEMPLO ? `<p class="nota-demo"><b>FIREBASE_CONFIG tiene valores de ejemplo</b> (como «tu-proyecto»), no los de tu proyecto. Cámbialos por los reales. Mientras tanto la app funciona en modo demostración.</p>` : ""}
+    ${CONFIG_INCOMPLETA ? `<p class="nota-demo"><b>Falta el projectId de Firebase.</b> Revisa que en FIREBASE_CONFIG no diga PEGA_AQUI. Mientras tanto la app funciona en modo demostración.</p>` : ""}
+    ${!NUBE && !CONFIG_INCOMPLETA && !CONFIG_EJEMPLO ? `<p class="nota-demo"><b>Modo demostración.</b> Los datos se guardan solo en este dispositivo. Para que el equipo comparta la información, conecta la nube (instrucciones al inicio del archivo).</p>` : ""}
     <form data-form="entrada">
       <fieldset class="campo"><legend class="et">¿Quién eres?</legend>${radios("persona", opcionesEquipo(), S.user, "opc grande", true)}</fieldset>
       ${NUBE ? `<div class="campo"><label class="et" for="cod">Código del equipo</label>
@@ -897,6 +956,53 @@ function enviarSesion(f) {
 }
 
 /* =====================================================================
+   HOJA: ESTADO Y PRUEBA DE CONEXIÓN
+   ===================================================================== */
+function abrirDiagnostico() {
+  if (!NUBE) {
+    abrirHoja("Estado de la conexión", `<div class="caja"><p><b>Este dispositivo no está conectado a la nube.</b></p>
+      <p>Los datos se guardan solo aquí. Por eso lo que cambias no aparece en otros teléfonos ni en otras computadoras, y viceversa.</p>
+      <p>${CONFIG_EJEMPLO ? "Ahora mismo <b>FIREBASE_CONFIG</b> tiene valores de ejemplo (como «tu-proyecto»)." : "Falta el <b>projectId</b> en <b>FIREBASE_CONFIG</b>."} Cámbialos por los de tu proyecto de Firebase y vuelve a subir el archivo.</p></div>`);
+    return;
+  }
+  const [, texto] = etiquetaRed();
+  abrirHoja("Estado de la conexión", `<dl class="diag">
+      <dt>Estado</dt><dd>${esc(texto)}</dd>
+      <dt>Proyecto</dt><dd>${esc(CONFIG.projectId)}</dd>
+      <dt>Código del equipo</dt><dd>${esc(S.codigo)}</dd>
+      <dt>Cambios sin enviar</dt><dd>${S.enviando}${S.pendiente && !S.enviando ? " (guardados en el teléfono)" : ""}</dd>
+      <dt>Última confirmación</dt><dd>${S.ultimoOk ? hace(S.ultimoOk) : "ninguna todavía"}</dd>
+      ${S.ultimoLog ? `<dt>Aviso de Firebase</dt><dd style="font-weight:400;font-size:14px">${esc(S.ultimoLog)}</dd>` : ""}
+    </dl>
+    <button type="button" class="btn primario bloque" data-accion="probar">Probar conexión</button>
+    <div class="caja info" id="diagRes" hidden style="margin-top:14px"></div>
+    <a class="btn bloque" style="margin-top:12px;text-decoration:none" target="_blank" rel="noopener" href="https://console.firebase.google.com/project/${encodeURIComponent(CONFIG.projectId)}/firestore/data">Ver mis datos en Firebase</a>
+    <p class="ayuda" style="margin-top:14px">Para que dos dispositivos compartan datos, ambos deben mostrar el mismo proyecto y el mismo código del equipo.</p>`);
+}
+function explicarError(code) {
+  if (code === "permission-denied") return "<p><b>Firebase rechazó la escritura.</b></p><p>Revisa que las reglas estén publicadas (paso 3) y que el código del equipo tenga 10 o más letras o números.</p>";
+  if (code === "timeout" || code === "unavailable") return "<p><b>No se pudo llegar a tu base de datos en Firebase.</b> Las causas más comunes:</p><ul style='margin:6px 0 0;padding-left:20px'><li>La base de datos no está creada: en Firebase, entra a Firestore Database y confirma que exista (paso 2).</li><li>El projectId del archivo no es el de tu proyecto: compáralo con el que aparece arriba.</li><li>La red o un bloqueador de anuncios bloquea la conexión: prueba con datos móviles y sin extensiones.</li></ul>";
+  if (code === "not-found" || code === "failed-precondition") return "<p><b>La base de datos no está lista.</b></p><p>En Firebase, entra a Firestore Database y confirma que esté creada (paso 2).</p>";
+  return `<p><b>La prueba falló.</b></p><p>Detalle técnico: ${esc(code || "desconocido")}</p>`;
+}
+async function probarConexion() {
+  const out = $("#diagRes");
+  out.hidden = false; out.innerHTML = "<p>Probando, puede tardar unos segundos…</p>";
+  if (!FB) { out.innerHTML = "<p><b>Firebase aún no carga.</b> Revisa la conexión a Internet y vuelve a intentar.</p>"; return; }
+  const t0 = Date.now();
+  const limite = ms => new Promise((_, rej) => setTimeout(() => rej({ code: "timeout" }), ms));
+  try {
+    const { fs, db } = FB;
+    const ref = fs.doc(db, "equipos", S.codigo, "pruebas", "ping-" + limpiarCodigo(S.user));
+    await Promise.race([fs.setDoc(ref, { ts: t0, por: S.user }), limite(12000)]);
+    await Promise.race([fs.getDocFromServer(ref), limite(12000)]);
+    out.innerHTML = `<p><b>Todo bien.</b> El servidor respondió en ${((Date.now() - t0) / 1000).toFixed(1)} s.</p><p>Si aun así no ves los cambios del otro dispositivo, compara el código del equipo en ambos.</p>`;
+  } catch (e) {
+    out.innerHTML = explicarError(e && e.code);
+  }
+}
+
+/* =====================================================================
    EVENTOS
    ===================================================================== */
 document.addEventListener("click", e => {
@@ -914,13 +1020,8 @@ document.addEventListener("click", e => {
     case "informe": abrirInforme(n); break;
     case "sesion": abrirSesion(); break;
     case "cerrar": cerrarHoja(); break;
-    case "red":
-      avisar(!NUBE
-        ? "Modo demostración: los datos se guardan solo en este dispositivo. Conecta la nube para compartir con el equipo."
-        : S.conexion === "error" ? (S.errorMsg || "Error de conexión.")
-        : S.conexion === "sinred" ? "Sin conexión. Lo que anotes se enviará al reconectar."
-        : "Conectado. Los cambios se ven al instante en los demás teléfonos.");
-      break;
+    case "red": abrirDiagnostico(); break;
+    case "probar": probarConexion(); break;
   }
 });
 document.addEventListener("submit", e => {
