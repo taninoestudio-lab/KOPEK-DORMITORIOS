@@ -40,6 +40,8 @@ CÓMO CONECTARLA A LA NUBE GRATIS (Firebase, plan Spark, sin tarjeta)
 4. Configuración del proyecto (engrane) > "Tus apps" > icono web </>
    > registra la app (sin Hosting) y copia el bloque firebaseConfig.
 5. Pega esos valores abajo, en FIREBASE_CONFIG, y guarda el archivo.
+   Cambia SOLO los textos entre comillas. No copies las líneas que
+   empiezan con "import" ni con "const app": rompen la página.
 6. Publica el archivo con el nombre index.html (por ejemplo en
    GitHub Pages) y comparte el enlace en el grupo interno.
 7. Cada persona abre el enlace, elige su nombre y escribe el mismo
@@ -218,6 +220,32 @@ dialog::backdrop{background:rgba(20,28,34,.6)}
 </style>
 </head>
 <body>
+<script>
+/* Red de seguridad: si la app no arranca, muestra el motivo en vez de dejar la página en blanco. */
+(function () {
+  var errores = [];
+  function mostrar() {
+    if (window.__kopekListo || document.getElementById("kopek-falla")) return;
+    var d = document.createElement("div");
+    d.id = "kopek-falla";
+    d.style.cssText = "position:fixed;top:0;left:0;right:0;bottom:0;z-index:9999;overflow:auto;background:#fff;color:#1D2B33;font:16px/1.5 system-ui,Arial,sans-serif;padding:24px";
+    d.innerHTML =
+      '<h1 style="margin:0 0 10px;font-size:26px">KOPEK no pudo iniciar</h1>' +
+      '<p>Casi siempre pasa porque los datos de Firebase quedaron mal pegados en el archivo <b>index.html</b>.</p>' +
+      '<p>Ábrelo, busca <b>FIREBASE_CONFIG</b> y déjalo con esta forma. Cambia solo lo que está entre comillas:</p>' +
+      '<pre style="background:#F1F5F7;border:1px solid #C9D2D7;border-radius:8px;padding:12px;overflow:auto;font-size:14px">const FIREBASE_CONFIG = {\n  apiKey: "AIza...",\n  authDomain: "tu-proyecto.firebaseapp.com",\n  projectId: "tu-proyecto",\n  storageBucket: "tu-proyecto.firebasestorage.app",\n  messagingSenderId: "123456789",\n  appId: "1:123456789:web:abc123"\n};</pre>' +
+      '<p>No pegues las líneas que empiezan con <b>import</b> ni con <b>const app</b>.</p>' +
+      '<p style="color:#4A5A64;font-size:14px">Detalle técnico: <code id="kopek-falla-det"></code></p>';
+    document.body.appendChild(d);
+    document.getElementById("kopek-falla-det").textContent = errores.join(" | ") || "la app no llegó a arrancar";
+  }
+  window.addEventListener("error", function (e) {
+    errores.push((e.message || "Error") + (e.lineno ? " (línea " + e.lineno + ")" : ""));
+    mostrar();
+  });
+  window.addEventListener("load", function () { setTimeout(mostrar, 1200); });
+})();
+</script>
 <header id="cab"></header>
 <main id="app"></main>
 <nav id="nav" aria-label="Secciones"></nav>
@@ -241,19 +269,24 @@ dialog::backdrop{background:rgba(20,28,34,.6)}
 const EQUIPO = ["Isaías", "Lozano", "Juan Pablo", "Lenny"];
 const TOTAL_DORMITORIOS = 26;
 
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
-const firebaseConfig = {
-  apiKey: "AIzaSyDj2iNr3T9klNm8j0NPeD612lhky-fqzs4",
-  authDomain: "kopek-dormitorios.firebaseapp.com",
-  projectId: "kopek-dormitorios",
-  storageBucket: "kopek-dormitorios.firebasestorage.app",
-  messagingSenderId: "219393022439",
-  appId: "1:219393022439:web:5e0387ab911bfc4c110542",
-  measurementId: "G-ZYBJZKN90F"
-};
+// Pega aquí los datos de tu proyecto de Firebase (paso 4 de las instrucciones).
+// Cambia SOLO los textos entre comillas. No borres comillas ni comas.
+const FIREBASE_CONFIG = {
+  apiKey: "AIza...",
+  authDomain: "tu-proyecto.firebaseapp.com",
+  projectId: "tu-proyecto",
+  storageBucket: "tu-proyecto.firebasestorage.app",
+  messagingSenderId: "123456789",
+  appId: "1:123456789:web:abc123"
 };
 const FIREBASE_VERSION = "10.14.1";
-const NUBE = !!FIREBASE_CONFIG.apiKey && !/^PEGA/i.test(FIREBASE_CONFIG.apiKey);
+// Acepta también el nombre "firebaseConfig", que es el que muestra la consola de Firebase.
+const CONFIG = (typeof FIREBASE_CONFIG !== "undefined" && FIREBASE_CONFIG) ||
+               (typeof firebaseConfig !== "undefined" && firebaseConfig) || {};
+const CLAVES_OBLIGATORIAS = ["apiKey", "projectId", "appId"];
+const _llenas = CLAVES_OBLIGATORIAS.filter(k => CONFIG[k] && !/^PEGA/i.test(CONFIG[k])).length;
+const NUBE = _llenas === CLAVES_OBLIGATORIAS.length;
+const CONFIG_INCOMPLETA = _llenas > 0 && !NUBE;
 
 /* =====================================================================
    UTILIDADES
@@ -376,7 +409,7 @@ async function conectar() {
       import(`${base}/firebase-firestore.js`)
     ]);
     if (!FB) {
-      const app = appMod.initializeApp(FIREBASE_CONFIG);
+      const app = appMod.initializeApp(CONFIG);
       let db;
       try {
         db = fs.initializeFirestore(app, {
@@ -473,7 +506,8 @@ function vistaEntrada() {
   return `<section class="entrada"><div class="entrada-card">
     <div class="logo">KOPEK</div>
     <p class="sub">Dormitorios</p>
-    ${!NUBE ? `<p class="nota-demo"><b>Modo demostración.</b> Los datos se guardan solo en este dispositivo. Para que el equipo comparta la información, conecta la nube (instrucciones al inicio del archivo).</p>` : ""}
+    ${CONFIG_INCOMPLETA ? `<p class="nota-demo"><b>Faltan datos de Firebase.</b> Revisa que apiKey, projectId y appId en FIREBASE_CONFIG no digan PEGA_AQUI. Mientras tanto la app funciona en modo demostración.</p>` : ""}
+    ${!NUBE && !CONFIG_INCOMPLETA ? `<p class="nota-demo"><b>Modo demostración.</b> Los datos se guardan solo en este dispositivo. Para que el equipo comparta la información, conecta la nube (instrucciones al inicio del archivo).</p>` : ""}
     <form data-form="entrada">
       <fieldset class="campo"><legend class="et">¿Quién eres?</legend>${radios("persona", opcionesEquipo(), S.user, "opc grande", true)}</fieldset>
       ${NUBE ? `<div class="campo"><label class="et" for="cod">Código del equipo</label>
@@ -919,6 +953,7 @@ document.addEventListener("input", e => {
    ===================================================================== */
 if (!NUBE) demoCargar();
 render();
+window.__kopekListo = true;
 if (NUBE && S.codigo) conectar();
 </script>
 </body>
